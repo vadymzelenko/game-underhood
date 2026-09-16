@@ -1,30 +1,115 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1, maximum-scale=1,
+  <meta charset="UTF-8" />
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1,
                  user-scalable=no, viewport-fit=cover" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="theme-color" content="#120e23" />
-    <title>Детский дом — Пиксель-арт открытый мир</title>
-    <style>
-        html, body {
-            margin: 0; padding: 0; height: 100%; overflow: hidden;
-            background: #120e23;
-            touch-action: none;
-            -webkit-user-select: none; user-select: none;
-            -webkit-tap-highlight-color: transparent;
-            overscroll-behavior: none;
-        }
-        #game { width: 100vw; height: 100dvh; }
-        #game canvas { image-rendering: pixelated !important; display: block; }
-    </style>
+
+  <!-- PWA -->
+  <link rel="manifest" href="./manifest.json" />
+  <meta name="theme-color" content="#120e23" />
+  <meta name="description"
+        content="Underhood — пиксель-арт открытый мир: лес, море и детский дом." />
+
+  <!-- iOS -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Underhood" />
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+
+  <!-- Windows / Android -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+
+  <title>Underhood</title>
+
+  <style>
+    html, body {
+      margin: 0; padding: 0; height: 100%; overflow: hidden;
+      background: #120e23;
+      touch-action: none;
+      -webkit-user-select: none; user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior: none;
+    }
+    #game { width: 100vw; height: 100dvh; }
+    #game canvas { image-rendering: pixelated !important; display: block; }
+
+    /* Экран установки PWA (опционально) */
+    #install-banner {
+      position: fixed; left: 12px; right: 12px; bottom: 12px;
+      background: #120e23; color: #fff1a9;
+      border: 1px solid #fff1a9;
+      padding: 10px 14px; font: 14px/1.3 monospace;
+      display: none; z-index: 9999;
+      justify-content: space-between; align-items: center; gap: 12px;
+    }
+    #install-banner button {
+      background: #349c58; border: 0; color: #120e23;
+      padding: 8px 14px; font: bold 14px monospace; cursor: pointer;
+    }
+  </style>
 </head>
 <body>
-<div id="game"></div>
-<script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
-<script type="module" src="./src/main.js"></script>
+  <div id="game"></div>
+
+  <div id="install-banner">
+    <span>Установить Underhood на главный экран?</span>
+    <div>
+      <button id="install-yes">Да</button>
+      <button id="install-no">Нет</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+  <script type="module" src="./src/main.js"></script>
+
+  <!-- Регистрация service worker'а -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker
+          .register('./sw.js', { scope: './' })
+          .then((reg) => {
+            console.log('[Underhood] SW зарегистрирован', reg.scope);
+          })
+          .catch((err) => {
+            console.warn('[Underhood] SW ошибка:', err);
+          });
+      });
+    }
+  </script>
+
+  <!-- Кнопка установки (beforeinstallprompt) -->
+  <script>
+    let deferredPrompt = null;
+    const banner = document.getElementById('install-banner');
+    const yes = document.getElementById('install-yes');
+    const no = document.getElementById('install-no');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      banner.style.display = 'flex';
+    });
+
+    yes?.addEventListener('click', async () => {
+      banner.style.display = 'none';
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+    });
+
+    no?.addEventListener('click', () => {
+      banner.style.display = 'none';
+    });
+
+    window.addEventListener('appinstalled', () => {
+      console.log('[Underhood] Установлено!');
+      banner.style.display = 'none';
+    });
+  </script>
 </body>
 </html>
