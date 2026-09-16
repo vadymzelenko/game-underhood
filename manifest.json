@@ -1,1 +1,17 @@
-
+{
+  "name": "Underhood",
+  "short_name": "Underhood",
+  "description": "Мрачный инди-триллер в открытом мире с элементами выживания и исследования тайного приюта.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#120E23",
+  "theme_color": "#120E23",
+  "lang": "ru",
+  "dir": "ltr",
+  "categories": [
+    "games",
+    "entertainment"
+  ]
+}
