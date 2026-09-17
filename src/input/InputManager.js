@@ -1,22 +1,20 @@
 import { KeyboardSource } from './sources/KeyboardSource.js';
 import { GamepadSource }  from './sources/GamepadSource.js';
 import { TouchSource }    from './sources/TouchSource.js';
-import { TouchBus }       from './TouchBus.js';
 
 export class InputManager {
     constructor(scene) {
         this.scene = scene;
 
+        // TouchSource всегда в списке — он безвреден, когда TouchBus.enabled = false.
+        // Иначе при создании InputManager до TouchControlsScene.create()
+        // тач-источник не добавится, и ввод с телефона не будет читаться.
         this.sources = [
             new KeyboardSource(scene),
             new GamepadSource(scene),
+            new TouchSource(scene),
         ];
 
-        if (TouchBus.enabled) {
-            this.sources.push(new TouchSource(scene));
-        }
-
-        /** Единый стейт для игровой логики. */
         this.state = {
             moveX: 0,
             moveY: 0,
@@ -42,7 +40,6 @@ export class InputManager {
             if (s.pausePressed)    pausePressed = true;
         }
 
-        // Клампим вектор до длины 1 (диагональ не быстрее)
         const len = Math.hypot(mx, my);
         if (len > 1) { mx /= len; my /= len; }
 
@@ -59,7 +56,6 @@ export class InputManager {
     }
 }
 
-/** Проверка, включать ли мобильный UI. URL-override удобен для отладки. */
 export function shouldEnableTouch(scene) {
     const params = new URLSearchParams(location.search);
     if (params.has('notouch')) return false;
