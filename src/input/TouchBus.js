@@ -1,24 +1,24 @@
 /**
- * Мост между TouchControlsScene (UI) и InputManager (геймплей).
- * Модульный singleton — одна копия на всё приложение.
- *
- * UI-сцена пишет сюда состояние стика и кнопок.
- * Каждая геймплейная сцена читает и **потребляет** edge-события.
+ * Общий буфер между TouchControlsScene (пишет) и TouchSource (читает).
+ * Однокадровые флаги (interactPressed / pausePressed) — latched:
+ * TouchControlsScene выставляет true при just-pressed,
+ * TouchSource читает и сбрасывает в false.
  */
 export const TouchBus = {
-    // Движение: -1..1 по обеим осям
+    enabled: false,
+
     moveX: 0,
     moveY: 0,
 
-    // Кнопки (edge — потребляются один раз за кадр)
-    interactPressed: false,
     interactHeld: false,
+
+    interactPressed: false,
     pausePressed: false,
 
-    // Отключён ли UI на этом устройстве
-    enabled: false,
-
-    resetEdges() {
+    reset() {
+        this.moveX = 0;
+        this.moveY = 0;
+        this.interactHeld = false;
         this.interactPressed = false;
         this.pausePressed = false;
     },
