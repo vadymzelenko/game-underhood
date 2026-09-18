@@ -1,72 +1,51 @@
 import {
-    makeTree, makeBush, makePlayerSheet,
+    makeOakTree, makePineTree, makeSpruceTree, makeBirchTree, makeDeadTree,
+    makeFern, makeRock, makeLog, makeShadowSoft, makePlayerSheet,
+    applyScale,
 } from './ProceduralAssets.js';
+import { TUNING } from '../config/TuningConfig.js';
 
-/**
- * ┌─────────────────────────────────────────────────────────────┐
- * │  РЕЕСТР АССЕТОВ                                             │
- * │                                                             │
- * │  ★ ЭТО ЕДИНСТВЕННЫЙ ФАЙЛ, КОТОРЫЙ ПРАВИТСЯ ПРИ ДОБАВЛЕНИИ   │
- * │    АССЕТОВ. Вся игровая логика подхватывает их через        │
- * │    ключи (например 'tree_0', 'player').                     │
- * │                                                             │
- * │  ПРАВИЛА ЗАПОЛНЕНИЯ:                                        │
- * │  ─ images: { key: { path?, procedure? } }                   │
- * │  ─ spritesheets: { key: { path?, frameWidth, frameHeight,   │
- * │                     procedure? } }                          │
- * │  ─ characters: { key: CharacterDef }                        │
- * │                                                             │
- * │  ЛОГИКА ЗАГРУЗКИ:                                           │
- * │  1. Если есть path → грузим файл из /assets/…               │
- * │  2. Если файл не найден, но есть procedure → генерим кодом  │
- * │  3. Если path нет, но есть procedure → сразу генерим        │
- * │                                                             │
- * │  CharacterDef (авто-анимации):                              │
- * │    texture:                  ключ спрайтшита                │
- * │    directions:               ['down','up','left','right']   │
- * │    walkFramesPerDirection:   сколько кадров в строке        │
- * │    idleFrame:                индекс idle-кадра в строке     │
- * │    walkRate / idleRate:      fps анимаций                   │
- * └─────────────────────────────────────────────────────────────┘
- */
+const S = TUNING.trees.scale;
 
 export const ASSET_REGISTRY = {
-    // ─────────────────────────────────────────────────────────────
-    //  ОДИНОЧНЫЕ КАРТИНКИ
-    // ─────────────────────────────────────────────────────────────
     images: {
-        tree_0: { path: 'assets/world/tree_0.png', procedure: () => makeTree(101, 13.2, 4) },
-        tree_1: { path: 'assets/world/tree_1.png', procedure: () => makeTree(217, 12.0, 3) },
-        tree_2: { path: 'assets/world/tree_2.png', procedure: () => makeTree(353, 14.2, 5) },
+        // Деревья — все канвасы увеличиваются через applyScale
+        tree_oak_0:    { procedure: () => applyScale(makeOakTree(101, TUNING.trees.oak.size),    S) },
+        tree_pine_0:   { procedure: () => applyScale(makePineTree(201, TUNING.trees.pine.size),  S) },
+        tree_pine_1:   { procedure: () => applyScale(makePineTree(202, TUNING.trees.pine2.size), S) },
+        tree_spruce_0: { procedure: () => applyScale(makeSpruceTree(301, TUNING.trees.spruce.size), S) },
+        tree_birch_0:  { procedure: () => applyScale(makeBirchTree(401, TUNING.trees.birch.size), S) },
+        tree_birch_1:  { procedure: () => applyScale(makeBirchTree(402, TUNING.trees.birch2.size), S) },
+        tree_dead_0:   { procedure: () => applyScale(makeDeadTree(501, TUNING.trees.dead.size),  S) },
+        tree_dead_1:   { procedure: () => applyScale(makeDeadTree(502, TUNING.trees.dead2.size), S) },
 
-        // ── ПРИМЕР: пользовательские ассеты ──
-        // bush_0: { path: 'assets/world/bush_0.png' },
-        // rock_0: { path: 'assets/world/rock_0.png' },
-        // cabin_0: { path: 'assets/buildings/cabin_0.png' },
-        // chest: { path: 'assets/items/chest.png' },
+        // Декор
+        fern_0: { procedure: () => applyScale(makeFern(601, 'medium', 'green'), TUNING.decor.scale) },
+        fern_1: { procedure: () => applyScale(makeFern(602, 'small',  'berry'), TUNING.decor.scale) },
+        rock_0: { procedure: () => applyScale(makeRock(701, 'pebble'), TUNING.decor.scale) },
+        rock_1: { procedure: () => applyScale(makeRock(702, 'small'),  TUNING.decor.scale) },
+        rock_2: { procedure: () => applyScale(makeRock(703, 'medium'), TUNING.decor.scale) },
+        rock_3: { procedure: () => applyScale(makeRock(704, 'boulder'), TUNING.decor.scale) },
+
+        // Валежник
+        log_0: { procedure: () => applyScale(makeLog(801, 'small',  'thin'),     TUNING.decor.scale) },
+        log_1: { procedure: () => applyScale(makeLog(802, 'medium', 'branchy'),  TUNING.decor.scale) },
+        log_2: { procedure: () => applyScale(makeLog(803, 'medium', 'broken'),   TUNING.decor.scale) },
+        log_3: { procedure: () => applyScale(makeLog(804, 'large',  'rooted'),   TUNING.decor.scale) },
+
+        // Тень — большая, сплюснутая
+        shadow_soft: { procedure: () => makeShadowSoft(64, 20) },
     },
 
-    // ─────────────────────────────────────────────────────────────
-    //  СПРАЙТШИТЫ (раскладываются по сетке frameWidth × frameHeight)
-    // ─────────────────────────────────────────────────────────────
     spritesheets: {
         player: {
-            path: 'assets/characters/player.png',   // ваш PNG: 4 столбца × 4 строки кадров
+            path: 'assets/characters/player.png',
             frameWidth: 16,
             frameHeight: 24,
             procedure: () => makePlayerSheet(16, 24),
         },
-
-        // ── ПРИМЕРЫ для добавления ──
-        // dog:    { path: 'assets/animals/dog.png',    frameWidth: 16, frameHeight: 16,
-        //           procedure: () => makePlayerSheet(16, 16) },
-        // child:  { path: 'assets/characters/child.png', frameWidth: 16, frameHeight: 24,
-        //           procedure: () => makePlayerSheet(16, 24) },
     },
 
-    // ─────────────────────────────────────────────────────────────
-    //  ПЕРСОНАЖИ — автоматически строятся idle/walk × 4 направления
-    // ─────────────────────────────────────────────────────────────
     characters: {
         player: {
             texture: 'player',
@@ -76,15 +55,5 @@ export const ASSET_REGISTRY = {
             walkRate: 8,
             idleRate: 1,
         },
-
-        // ── ПРИМЕР: новый персонаж без единой строчки логики ──
-        // dog: {
-        //   texture: 'dog',
-        //   directions: ['down', 'up', 'left', 'right'],
-        //   walkFramesPerDirection: 4,
-        //   idleFrame: 0,
-        //   walkRate: 10,
-        //   idleRate: 2,
-        // },
     },
 };

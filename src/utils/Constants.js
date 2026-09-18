@@ -1,94 +1,117 @@
 // ─────────────────────────────────────────────────────────────
-//  ПАЛИТРА (24 цвета). Только эти цвета разрешены в проекте.
+//  ПАЛИТРА
 // ─────────────────────────────────────────────────────────────
 export const PALETTE = Object.freeze({
-    TAN:          0xaea47e, // тёплый серо-песочный
-    GRAY:         0x6f6e72, // средний серый
-    PURPLE_GRAY:  0x534664, // фиолетово-серый
-    GREEN:        0x349c58, // основной зелёный (трава/крона)
-    LIGHT_GREEN:  0x6dba79, // светлый зелёный (блики)
-    TEAL:         0x2a7d75, // бирюзовый (вода/стекло)
-    DARK_TEAL:    0x24505f, // тёмный бирюзовый (глубокая вода/тени)
-    DARK_PURPLE:  0x2a2942, // тёмно-фиолетовый
-    ALMOST_BLACK: 0x120e23, // почти чёрный (тени)
-    DARK_PURPLE2: 0x3a1b40, // второй тёмно-фиолетовый
-    DARK_RED:     0x7a2849, // тёмно-красный
-    RED:          0xb74132, // красный
-    ORANGE:       0xe67146, // оранжевый
-    YELLOW:       0xebb85b, // песочный/жёлтый
-    GOLD:         0xc78539, // золотистый
-    BROWN:        0xa15c34, // коричневый (стены)
-    DARK_BROWN:   0x764032, // тёмно-коричневый
-    VERY_DARK:    0x402e2b, // очень тёмный (окантовка)
-    OLIVE:        0x56642e, // олива (лесная земля)
-    OLIVE_GREEN:  0x7e9432, // оливково-зелёный
-    YELLOW_GREEN: 0xc9c03d, // жёлто-зелёный
-    CREAM:        0xfff1a9, // кремовый (подсветки)
-    PINK:         0xe67a84, // розовый
-    DARK_PINK:    0xc23753, // тёмно-розовый
+    TAN:          0xaea47e,
+    GRAY:         0x6f6e72,
+    PURPLE_GRAY:  0x534664,
+    GREEN:        0x349c58,
+    LIGHT_GREEN:  0x6dba79,
+    TEAL:         0x2a7d75,
+    DARK_TEAL:    0x24505f,
+    DARK_PURPLE:  0x2a2942,
+    ALMOST_BLACK: 0x120e23,
+    DARK_PURPLE2: 0x3a1b40,
+    DARK_RED:     0x7a2849,
+    RED:          0xb74132,
+    ORANGE:       0xe67146,
+    YELLOW:       0xebb85b,
+    GOLD:         0xc78539,
+    BROWN:        0xa15c34,
+    DARK_BROWN:   0x764032,
+    VERY_DARK:    0x402e2b,
+    OLIVE:        0x56642e,
+    OLIVE_GREEN:  0x7e9432,
+    YELLOW_GREEN: 0xc9c03d,
+    CREAM:        0xfff1a9,
+    PINK:         0xe67a84,
+    DARK_PINK:    0xc23753,
 });
 
 // ─────────────────────────────────────────────────────────────
 //  МИР
 // ─────────────────────────────────────────────────────────────
-export const TILE_SIZE          = 16;        // нативных пикселя
-export const CHUNK_SIZE         = 16;        // тайлов в чанке
-export const CHUNK_PX           = TILE_SIZE * CHUNK_SIZE; // 256
-export const VIEW_CHUNK_RADIUS  = 3;         // 7×7 чанков
-export const CAMERA_ZOOM        = 3;         // ★ увеличение пикселя
-export const WORLD_SEED         = 20240517;
+export const TILE_SIZE         = 16;
+export const CHUNK_SIZE        = 16;
+export const CHUNK_PX          = TILE_SIZE * CHUNK_SIZE;    // 256
+export const VIEW_CHUNK_RADIUS = 3;
+export const CAMERA_ZOOM       = 3;
+export const WORLD_SEED        = 20240517;
 
-// ─────────────────────────────────────────────────────────────
-//  ЗОНА ЗАСТРОЙКИ (детский дом) — здесь деревья не спавнятся
-// ─────────────────────────────────────────────────────────────
+// ─── ФИНАЛЬНЫЙ МИР 10 000 × 10 000 px ───────────────────────
+export const WORLD_SIZE = 10000;
+export const WORLD_HALF = WORLD_SIZE / 2;   // 5000
+export const WORLD_MIN  = -WORLD_HALF;
+export const WORLD_MAX  =  WORLD_HALF;
+
+// Центр «дома» совпадает с центром мира
+export const WORLD_CENTER = Object.freeze({ x: 0, y: 0 });
+
+// Здание детского дома
 export const BUILDING_BOUNDS = Object.freeze({
     x: -120, y: -65, w: 240, h: 130,
 });
-// Вокруг дома — «расчистка» шириной в N тайлов
-export const BUILDING_CLEARING = 48; // px
+// Деревья не спавнятся в прямоугольнике BUILDING_BOUNDS, расширенном на padding
+export const BUILDING_CLEARING = 96;
 
+// ─────────────────────────────────────────────────────────────
+//  БИОМЫ
+// ─────────────────────────────────────────────────────────────
 export const BIOME = Object.freeze({
     DEEP_WATER: 0,
     WATER:      1,
-    SAND:       2,
-    GRASS:      3,
-    FOREST:     4,
+    SWAMP:      2,
+    SAND:       3,
+    GRASS:      4,
+    BIRCH:      5,   // тепло + сухо
+    OAK:        6,   // средне + влажно
+    PINE:       7,   // холодно
+    // DEAD оставлен в палитре (для сюжетных точек), но в генерацию не входит.
+    DEAD:       8,
 });
 
 export const TILE_COLORS = Object.freeze({
     [BIOME.DEEP_WATER]: PALETTE.DARK_TEAL,
     [BIOME.WATER]:      PALETTE.TEAL,
+    [BIOME.SWAMP]:      PALETTE.OLIVE,
     [BIOME.SAND]:       PALETTE.YELLOW,
     [BIOME.GRASS]:      PALETTE.GREEN,
-    [BIOME.FOREST]:     PALETTE.OLIVE,
+    [BIOME.BIRCH]:      PALETTE.LIGHT_GREEN,
+    [BIOME.OAK]:        PALETTE.OLIVE_GREEN,
+    [BIOME.PINE]:       PALETTE.OLIVE,
+    [BIOME.DEAD]:       PALETTE.VERY_DARK,
 });
 
-import { PALETTE as P } from './Constants.js';  // уже импортируется через TILE_COLORS
-
-// Акцентный цвет каждого биома — используется для микро-шума на тайлах.
 export const ACCENT_COLORS = Object.freeze({
-    [BIOME.DEEP_WATER]: P.ALMOST_BLACK,
-    [BIOME.WATER]:      P.DARK_TEAL,
-    [BIOME.SAND]:       P.GOLD,
-    [BIOME.GRASS]:      P.LIGHT_GREEN,
-    [BIOME.FOREST]:     P.OLIVE_GREEN,
+    [BIOME.DEEP_WATER]: PALETTE.ALMOST_BLACK,
+    [BIOME.WATER]:      PALETTE.DARK_TEAL,
+    [BIOME.SWAMP]:      PALETTE.DARK_TEAL,
+    [BIOME.SAND]:       PALETTE.GOLD,
+    [BIOME.GRASS]:      PALETTE.LIGHT_GREEN,
+    [BIOME.BIRCH]:      PALETTE.YELLOW_GREEN,
+    [BIOME.OAK]:        PALETTE.YELLOW_GREEN,
+    [BIOME.PINE]:       PALETTE.OLIVE_GREEN,
+    [BIOME.DEAD]:       PALETTE.GRAY,
 });
 
-// Количество «зерновых» пикселей на тайл (шум).
 export const TILE_NOISE_COUNT = 9;
 
+// ─────────────────────────────────────────────────────────────
+//  ГЛУБИНА (Y-sorting)
+// ─────────────────────────────────────────────────────────────
 export const DEPTH = Object.freeze({
-    GROUND:   -1000,
+    GROUND:   -100000,
+    SHADOW:   -1000,         // ← все тени тут, единым слоем
     BUILDING: 0,
-    ENTITIES: 1000,
-    OVERLAY:  100000,
+    ENTITIES: 100000,        // спрайты: DEPTH.ENTITIES + worldY
+    VIGNETTE: 900000,        // ← НОВОЕ: виньетка ниже UI, выше мира
+    OVERLAY:  1000000,
 });
 
 // ─────────────────────────────────────────────────────────────
-//  СУБ-ТАЙЛИНГ (рендер)
+//  СУБ-ТАЙЛИНГ
 // ─────────────────────────────────────────────────────────────
-// Размер суб-ячейки в нативных пикселях. 16 / SUB = число ячеек по стороне.
-// 4 → переходы «плывут» на 4 px, а не на 16.
 export const SUB_TILE   = 4;
-// Амплитуда шумового смещения суб-ячейки (px). Больше → более рваные края.
 export const SUB_JITTER = 6;
+
+

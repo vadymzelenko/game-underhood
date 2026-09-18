@@ -1,8 +1,14 @@
 import {
-    CHUNK_SIZE, CHUNK_PX, TILE_SIZE, BIOME, DEPTH,
+    CHUNK_PX, BIOME, DEPTH,
     BUILDING_BOUNDS, BUILDING_CLEARING,
 } from '../utils/Constants.js';
 import { hash2D } from '../utils/MathUtils.js';
+import { JitteredSampler } from './JitteredSampler.js';
+import { TUNING } from '../config/TuningConfig.js';
+
+const TREE_DENSE_SALT  = 0x1111;
+const TREE_SPARSE_SALT = 0x2222;
+const DECOR_SALT       = 0x3333;
 
 export class Chunk {
     constructor(scene, cx, cy, biomeGen, pixelRenderer) {
@@ -14,11 +20,10 @@ export class Chunk {
 
         this.texKey = null;
         this.sprite = null;
-        this.trees = [];
+        this.objects = [];   // { sprite, shadow }
     }
 
     generate() {
-        // Пиксельная текстура земли
         this.texKey = this.pixelRenderer.render(this.scene, this.cx, this.cy);
         const ox = this.cx * CHUNK_PX;
         const oy = this.cy * CHUNK_PX;
@@ -28,37 +33,144 @@ export class Chunk {
     }
 
     render() {
-        // Деревья поверх — тот же контракт, что и раньше
         const ox = this.cx * CHUNK_PX;
         const oy = this.cy * CHUNK_PX;
+        const maxX = ox + CHUNK_PX;
+        const maxY = oy + CHUNK_PX;
 
-        for (let ty = 0; ty < CHUNK_SIZE; ty++) {
-            for (let tx = 0; tx < CHUNK_SIZE; tx++) {
-                const wx = ox + tx * TILE_SIZE + TILE_SIZE * 0.5;
-                const wy = oy + ty * TILE_SIZE + TILE_SIZE * 0.5;
+        const dense = new JitteredSampler(28, 0xBEEF).sample(
+            ox, oy, maxX, maxY,
+            (x, y) => {
+                if (this._insideBuildingZone(x, y)) return 0;
+                const b = this.biomeGen.getBiome(x, y);
+                if (b !== BIOME.PINE && b !== BIOME.BIRCH &&
+                    b !== BIOME.SWAMP && b !== BIOME.GRASS) return 0;
+                if (b === BIOME.GRASS) return this.biomeGen.getTreeDensity(x, y) * 0.35;
+                return this.biomeGen.getTreeDensity(x, y);
+            },
+            TREE_DENSE_SALT,
+        );
 
-                if (this._insideBuildingZone(wx, wy)) continue;
+        const sparse = new JitteredSampler(78, 0xCAFE).sample(
+            ox, oy, maxX, maxY,
+            (x, y) => {
+                if (this._insideBuildingZone(x, y)) return 0;
+                if (this.biomeGen.getBiome(x, y) !== BIOME.OAK) return 0;
+                return this.biomeGen.getTreeDensity(x, y);
+            },
+            TREE_SPARSE_SALT,
+        );
 
-                const biome = this.biomeGen.getBiome(wx, wy);
-                if (biome !== BIOME.FOREST) continue;
+        const decor = new JitteredSampler(44, 0xFACE).sample(
+            ox, oy, maxX, maxY,
+            (x, y) => {
+                if (this._insideBuildingZone(x, y)) return 0;
+                return this.biomeGen.getDecorDensity(x, y);
+            },
+            DECOR_SALT,
+        );
 
-                const density = this.biomeGen.getTreeDensity(wx, wy);
-                if (density < 0.58) continue;
+        for (const p of dense)  this._placeTree(p.x, p.y);
+        for (const p of sparse) this._placeTree(p.x, p.y);
+        for (const p of decor)  this._placeDecor(p.x, p.y);
+    }
 
-                const variant = Math.min(2, Math.floor(hash2D(tx, ty, 9999) * 3));
-                const tree = this.scene.add.image(wx, wy + 4, `tree_${variant}`);
-                tree.setOrigin(0.5, 0.95);
-                tree.setDepth(DEPTH.ENTITIES + tree.y);
-                this.trees.push(tree);
-            }
+    _placeTree(wx, wy) {
+        const biome = this.biomeGen.getBiome(wx, wy);
+        const r = hash2D(Math.floor(wx), Math.floor(wy), 4242);
+        let key = null;
+        let cfg = null;
+
+        switch (biome) {
+            case BIOME.PINE:
+                if (r < 0.55)      { key = 'tree_pine_0';   cfg = TUNING.trees.pine; }
+                else if (r < 0.90) { key = 'tree_pine_1';   cfg = TUNING.trees.pine2; }
+                else               { key = 'tree_spruce_0'; cfg = TUNING.trees.spruce; }
+                break;
+            case BIOME.BIRCH:
+                if (r < 0.5) { key = 'tree_birch_0'; cfg = TUNING.trees.birch; }
+                else         { key = 'tree_birch_1'; cfg = TUNING.trees.birch2; }
+                break;
+            case BIOME.OAK:
+                key = 'tree_oak_0'; cfg = TUNING.trees.oak;
+                break;
+            case BIOME.SWAMP:
+                if (r < 0.75) { key = 'tree_dead_0'; cfg = TUNING.trees.dead; }
+                else          { key = 'tree_dead_1'; cfg = TUNING.trees.dead2; }
+                break;
+            case BIOME.GRASS:
+                if (r < 0.35) { key = 'tree_birch_0'; cfg = TUNING.trees.birch; }
+                break;
         }
+        if (!key || !cfg) return;
+        this._addObject(wx, wy, key, cfg.shadowW, cfg.shadowH, cfg.yOff);
+    }
+
+    _placeDecor(wx, wy) {
+        const biome = this.biomeGen.getBiome(wx, wy);
+        const r = hash2D(Math.floor(wx), Math.floor(wy), 7711);
+        let key = null;
+        let cfg = TUNING.decor.rock;
+
+        switch (biome) {
+            case BIOME.GRASS:
+            case BIOME.OAK:
+                if (r < 0.42)      { key = 'fern_0'; cfg = TUNING.decor.fern; }
+                else if (r < 0.72) { key = 'rock_0'; cfg = TUNING.decor.rock; }
+                else if (r < 0.90) { key = 'rock_1'; cfg = TUNING.decor.rock; }
+                else               { key = 'log_0';  cfg = TUNING.decor.log; }
+                break;
+            case BIOME.BIRCH:
+            case BIOME.PINE:
+                if (r < 0.35)      { key = 'fern_0'; cfg = TUNING.decor.fern; }
+                else if (r < 0.60) { key = 'fern_1'; cfg = TUNING.decor.fern; }
+                else if (r < 0.78) { key = 'rock_0'; cfg = TUNING.decor.rock; }
+                else if (r < 0.92) { key = 'log_1';  cfg = TUNING.decor.log; }
+                else               { key = 'rock_2'; cfg = TUNING.decor.rock; }
+                break;
+            case BIOME.SWAMP:
+                if (r < 0.5)      { key = 'log_2';  cfg = TUNING.decor.log; }
+                else if (r < 0.8) { key = 'fern_1'; cfg = TUNING.decor.fern; }
+                else              { key = 'rock_1'; cfg = TUNING.decor.rock; }
+                break;
+            case BIOME.SAND:
+                key = r < 0.6 ? 'rock_0' : 'rock_1'; cfg = TUNING.decor.rock;
+                break;
+        }
+        if (!key || !cfg) return;
+        this._addObject(wx, wy, key, cfg.shadowW, cfg.shadowH, cfg.yOff);
+    }
+
+    /**
+     * Умная тень (п.1 ТЗ):
+     *  • shadow.setDepth(DEPTH.SHADOW) — БЕЗ + wy.
+     *    Все тени лежат на едином слое под всеми спрайтами.
+     *    Тень дерева физически не может перекрыть персонажа.
+     *  • sprite.setDepth(DEPTH.ENTITIES + wy) — Y-sort.
+     *  • Тень привязана к основанию (wy + yOff), а не к центру спрайта.
+     */
+    _addObject(wx, wy, key, shW, shH, yOff) {
+        const baseY = wy + yOff;
+
+        const shadow = this.scene.add.image(wx, baseY, 'shadow_soft');
+        shadow.setOrigin(0.5, 0.5);
+        shadow.setDisplaySize(shW, shH);
+        shadow.setAlpha(TUNING.shadow.alpha);
+        shadow.setTint(TUNING.shadow.color);
+        shadow.setDepth(DEPTH.SHADOW);          // ← единый слой, без Y-sort
+
+        const sprite = this.scene.add.image(wx, baseY, key);
+        sprite.setOrigin(0.5, 1);
+        sprite.setDepth(DEPTH.ENTITIES + wy);   // ← Y-sort
+
+        this.objects.push({ sprite, shadow });
     }
 
     _insideBuildingZone(wx, wy) {
         const b = BUILDING_BOUNDS;
-        const pad = BUILDING_CLEARING;
-        return wx > b.x - pad && wx < b.x + b.w + pad
-            && wy > b.y - pad && wy < b.y + b.h + pad;
+        const p = BUILDING_CLEARING;
+        return wx > b.x - p && wx < b.x + b.w + p
+            && wy > b.y - p && wy < b.y + b.h + p;
     }
 
     destroy() {
@@ -66,7 +178,10 @@ export class Chunk {
         if (this.texKey && this.scene.textures.exists(this.texKey)) {
             this.scene.textures.remove(this.texKey);
         }
-        for (const t of this.trees) t.destroy();
-        this.trees.length = 0;
+        for (const o of this.objects) {
+            o.sprite.destroy();
+            o.shadow.destroy();
+        }
+        this.objects.length = 0;
     }
 }

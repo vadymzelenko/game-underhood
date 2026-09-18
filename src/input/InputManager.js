@@ -1,18 +1,16 @@
 import { KeyboardSource } from './sources/KeyboardSource.js';
 import { GamepadSource }  from './sources/GamepadSource.js';
 import { TouchSource }    from './sources/TouchSource.js';
+import { TouchBus }       from './TouchBus.js';
 
 export class InputManager {
     constructor(scene) {
         this.scene = scene;
 
-        // TouchSource всегда в списке — он безвреден, когда TouchBus.enabled = false.
-        // Иначе при создании InputManager до TouchControlsScene.create()
-        // тач-источник не добавится, и ввод с телефона не будет читаться.
         this.sources = [
             new KeyboardSource(scene),
             new GamepadSource(scene),
-            new TouchSource(scene),
+            new TouchSource(scene),   // ← всегда, сам проверит TouchBus.enabled
         ];
 
         this.state = {

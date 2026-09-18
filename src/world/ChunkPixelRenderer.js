@@ -27,6 +27,14 @@ export class ChunkPixelRenderer {
         const originX = cx * CHUNK_PX;
         const originY = cy * CHUNK_PX;
 
+        const BAYER4 = [
+            [ 0,  8,  2, 10],
+            [12,  4, 14,  6],
+            [ 3, 11,  1,  9],
+            [15,  7, 13,  5],
+        ];
+        const bayer = (x, y) => (BAYER4[y & 3][x & 3] + 0.5) / 16;
+
         if (scene.textures.exists(texKey)) scene.textures.remove(texKey);
 
         const canvas = document.createElement('canvas');
@@ -51,14 +59,44 @@ export class ChunkPixelRenderer {
             }
         }
 
-        // ─── Шаг 2. Пиксели ───
+        // ─── Шаг 2. Пиксели + дизеринг на границах биомов ───
+        const DITH = { pDirect: 0.42, pDiagonal: 0.20 };
+        try {
+            const { TUNING } = require('../config/TuningConfig.js');
+            if (TUNING?.dithering) {
+                DITH.pDirect   = TUNING.dithering.pDirect;
+                DITH.pDiagonal = TUNING.dithering.pDiagonal;
+            }
+        } catch (_) { /* предпросмотр без config */ }
+
         for (let py = 0; py < size; py++) {
             const sy = (py / SUB_TILE) | 0;
             const row = sy * subGrid;
             for (let px = 0; px < size; px++) {
                 const sx = (px / SUB_TILE) | 0;
                 const biome = biomeGrid[row + sx];
-                const color = this._baseColor(biome, px, py, originX + px, originY + py);
+
+                // Дизеринг: если рядом другой биом — иногда «пробиваем» его цвет
+                let chosenBiome = biome;
+                outer:
+                    for (let dy = -1; dy <= 1; dy++) {
+                        for (let dx = -1; dx <= 1; dx++) {
+                            if (dx === 0 && dy === 0) continue;
+                            const nx = sx + dx, ny = sy + dy;
+                            if (nx < 0 || ny < 0 || nx >= subGrid || ny >= subGrid) continue;
+                            const nb = biomeGrid[ny * subGrid + nx];
+                            if (nb !== biome) {
+                                const dist = Math.abs(dx) + Math.abs(dy);
+                                const p = dist === 1 ? DITH.pDirect : DITH.pDiagonal;
+                                if (bayer(px, py) < p) {
+                                    chosenBiome = nb;
+                                    break outer;
+                                }
+                            }
+                        }
+                    }
+
+                const color = this._baseColor(chosenBiome, px, py, originX + px, originY + py);
 
                 const i = (py * size + px) * 4;
                 data[i]     = (color >> 16) & 0xff;

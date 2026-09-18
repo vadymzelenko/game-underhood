@@ -22,12 +22,11 @@ export function buildGameConfig(scenes) {
             smoothFactor: 0.2,        // сглаживание движения мыши
         },
 
-        width: 480,
-        height: 270,
-
         scale: {
             mode: Phaser.Scale.RESIZE,
-            autoCenter: Phaser.Scale.NO_CENTER
+            autoCenter: Phaser.Scale.CENTER_BOTH,
+            width: window.innerWidth,
+            height: window.innerHeight,
         },
 
         render: { powerPreference: 'high-performance' },
