@@ -47,13 +47,6 @@ export const WORLD_MAX  =  WORLD_HALF;
 // Центр «дома» совпадает с центром мира
 export const WORLD_CENTER = Object.freeze({ x: 0, y: 0 });
 
-// Здание детского дома
-export const BUILDING_BOUNDS = Object.freeze({
-    x: -120, y: -65, w: 240, h: 130,
-});
-// Деревья не спавнятся в прямоугольнике BUILDING_BOUNDS, расширенном на padding
-export const BUILDING_CLEARING = 96;
-
 // ─────────────────────────────────────────────────────────────
 //  БИОМЫ
 // ─────────────────────────────────────────────────────────────

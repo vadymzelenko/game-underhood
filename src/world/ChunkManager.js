@@ -26,6 +26,7 @@ export class ChunkManager {
         const needed = new Set();
         let changed = false;
 
+        // ── Создание новых чанков ────────────────────────────
         for (let dy = -VIEW_CHUNK_RADIUS; dy <= VIEW_CHUNK_RADIUS; dy++) {
             for (let dx = -VIEW_CHUNK_RADIUS; dx <= VIEW_CHUNK_RADIUS; dx++) {
                 const cx = pcx + dx, cy = pcy + dy;
@@ -40,14 +41,14 @@ export class ChunkManager {
                         this.obstaclesGroup, this.windSystem,
                     );
                     chunk.generate();
-                    const spawnAnimals = Math.max(Math.abs(dx), Math.abs(dy)) <= ANIMAL_SPAWN_RADIUS;
-                    chunk.render({ spawnAnimals });
+                    chunk.render();
                     this.chunks.set(k, chunk);
                     changed = true;
                 }
             }
         }
 
+        // ── Удаление ушедших чанков ──────────────────────────
         for (const [k, chunk] of this.chunks) {
             if (!needed.has(k)) {
                 chunk.destroy();
@@ -55,6 +56,19 @@ export class ChunkManager {
                 changed = true;
             }
         }
+
+        // ── ★ СПАВН ЖИВОТНЫХ ────────────────────────────────
+        // Каждый чанк при входе в ANIMAL_SPAWN_RADIUS от игрока
+        // получает животных ровно один раз за свою жизнь.
+        for (const [, chunk] of this.chunks) {
+            if (chunk.animalsSpawned) continue;
+            const ddx = chunk.cx - pcx;
+            const ddy = chunk.cy - pcy;
+            if (Math.max(Math.abs(ddx), Math.abs(ddy)) <= ANIMAL_SPAWN_RADIUS) {
+                chunk.spawnAnimals();
+            }
+        }
+        // ─────────────────────────────────────────────────────
 
         if (changed) this.dirty = true;
 
@@ -67,7 +81,6 @@ export class ChunkManager {
             }
         }
 
-        // Proximity-аудио растительности
         if (player && player.moving) {
             this._vegAccum += this.scene.game.loop.delta;
             if (this._vegAccum >= 120) {

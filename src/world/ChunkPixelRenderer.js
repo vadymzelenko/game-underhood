@@ -11,6 +11,10 @@ const BAYER4 = [
 ];
 const bayer = (x, y) => (BAYER4[y & 3][x & 3] + 0.5) / 16;
 
+/**
+ * Полностью детерминированный рендер чанка.
+ * Никаких Math.random — только hash2D и getBiome.
+ */
 export class ChunkPixelRenderer {
     constructor(biomeGen) { this.biomeGen = biomeGen; }
 
@@ -30,7 +34,6 @@ export class ChunkPixelRenderer {
 
         const subGrid = size / SUB_TILE + 1;
         const biomeGrid = new Uint8Array(subGrid * subGrid);
-        const elevGrid  = new Float32Array(subGrid * subGrid);
         const pathGrid  = new Float32Array(subGrid * subGrid);
 
         for (let sy = 0; sy < subGrid; sy++) {
@@ -41,7 +44,6 @@ export class ChunkPixelRenderer {
                 const jy = (hash2D(sx, sy, 2202) - 0.5) * SUB_JITTER;
 
                 biomeGrid[sy * subGrid + sx] = this.biomeGen.getBiome(wx + jx, wy + jy);
-                elevGrid [sy * subGrid + sx] = this.biomeGen.getWarpedElevation(wx, wy);
                 pathGrid [sy * subGrid + sx] = this.biomeGen.getPath(wx, wy);
             }
         }
@@ -60,20 +62,16 @@ export class ChunkPixelRenderer {
                 const subXf = (px - sx * SUB_TILE) / SUB_TILE;
 
                 const biome = biomeGrid[row0 + sx];
-                const elev  = elevGrid [row0 + sx];
-                const isWater = biome === BIOME.WATER || biome === BIOME.DEEP_WATER;
 
-                // ── Тропинка (билинейно) ─────────────────────────
-                let path = 0;
-                if (!isWater) {
-                    const p00 = pathGrid[row0 + sx];
-                    const p10 = pathGrid[row0 + sx + 1];
-                    const p01 = pathGrid[row1 + sx];
-                    const p11 = pathGrid[row1 + sx + 1];
-                    const pa = p00 + (p10 - p00) * subXf;
-                    const pb = p01 + (p11 - p01) * subXf;
-                    path = pa + (pb - pa) * subYf;
-                }
+                // ── Тропинка (билинейно) ─────────────────────
+                const p00 = pathGrid[row0 + sx];
+                const p10 = pathGrid[row0 + sx + 1];
+                const p01 = pathGrid[row1 + sx];
+                const p11 = pathGrid[row1 + sx + 1];
+                const pa = p00 + (p10 - p00) * subXf;
+                const pb = p01 + (p11 - p01) * subXf;
+                const path = pa + (pb - pa) * subYf;
+
                 if (path > 0.002) {
                     const coreT = B.pathSolidCenter;
                     let onPath = false;
@@ -93,40 +91,7 @@ export class ChunkPixelRenderer {
                     }
                 }
 
-                // ── ПЛЯЖ / МОКРЫЙ ПЕСОК ───────────────────────────
-                // У самой воды (elev < waterThreshold + wetBeachWidth) — «мокрый» песок
-                if (!isWater && elev < B.waterThreshold + B.wetBeachWidth) {
-                    const t = 1 - (elev - B.waterThreshold) / B.wetBeachWidth;
-                    const c = bayer(px, py) < t * 0.85 ? P.GOLD : P.YELLOW;
-                    const i = (py * size + px) * 4;
-                    data[i]     = (c >> 16) & 0xff;
-                    data[i + 1] = (c >> 8)  & 0xff;
-                    data[i + 2] =  c        & 0xff;
-                    data[i + 3] = 255;
-                    continue;
-                }
-
-                // Сухой песок: основной цвет + дизер к GRASS
-                if (!isWater && elev < B.waterThreshold + B.beachBandWidth) {
-                    const t = (elev - B.waterThreshold - B.wetBeachWidth)
-                        / Math.max(0.0001, B.beachBandWidth - B.wetBeachWidth);
-                    // 0..1 — от воды к земле
-                    let c = P.YELLOW;
-                    // Редкие золотистые вкрапления
-                    if (hash2D(px, py, 7711) < 0.06) c = P.GOLD;
-                    // Дизер к траве на удалении
-                    if (t > 0.55 && bayer(px, py) < (t - 0.55) * 0.8) {
-                        c = P.GREEN;
-                    }
-                    const i = (py * size + px) * 4;
-                    data[i]     = (c >> 16) & 0xff;
-                    data[i + 1] = (c >> 8)  & 0xff;
-                    data[i + 2] =  c        & 0xff;
-                    data[i + 3] = 255;
-                    continue;
-                }
-
-                // ── Дизеринг границ биомов ───────────────────────
+                // ── Дизеринг границ биомов ───────────────────
                 let chosen = biome;
                 outer:
                     for (let dy = -1; dy <= 1; dy++) {
@@ -175,6 +140,7 @@ export class ChunkPixelRenderer {
             if (biome === BIOME.OAK)   return P.OLIVE_GREEN;
             if (biome === BIOME.SAND)  return P.GOLD;
             if (biome === BIOME.WATER) return P.DARK_TEAL;
+            if (biome === BIOME.DEAD)  return P.DARK_PURPLE;
         }
         return TILE_COLORS[biome];
     }
@@ -190,7 +156,7 @@ export class ChunkPixelRenderer {
                 const py = sy * SUB_TILE;
                 if (biome === BIOME.GRASS) {
                     if (hash2D(px, py, 6601) < 0.5) this._stampFlower(data, size, px, py);
-                } else if (biome === BIOME.OAK || biome === BIOME.BIRCH) {
+                } else if (biome === BIOME.OAK || biome === BIOME.BIRCH || biome === BIOME.PINE) {
                     if (hash2D(px, py, 6602) < 0.6) this._stampMushroom(data, size, px, py);
                 } else if (biome === BIOME.SAND) {
                     const sub = hash2D(px, py, 6603);
@@ -198,6 +164,8 @@ export class ChunkPixelRenderer {
                     else           this._stampShell(data, size, px, py);
                 } else if (biome === BIOME.WATER) {
                     this._stampRipple(data, size, px, py);
+                } else if (biome === BIOME.DEAD) {
+                    if (hash2D(px, py, 6604) < 0.25) this._stampBone(data, size, px, py);
                 }
             }
         }
@@ -242,5 +210,10 @@ export class ChunkPixelRenderer {
         this._set(d, s, x + 1, y, P.CREAM);
         this._set(d, s, x + 2, y, P.CREAM);
         this._set(d, s, x + 1, y + 1, P.DARK_TEAL);
+    }
+    _stampBone(d, s, x, y) {
+        this._set(d, s, x, y, P.CREAM);
+        this._set(d, s, x + 2, y, P.CREAM);
+        this._set(d, s, x + 1, y + 1, P.CREAM);
     }
 }

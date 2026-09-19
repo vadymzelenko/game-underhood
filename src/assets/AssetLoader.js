@@ -4,22 +4,61 @@ export class AssetLoader {
     constructor(scene) {
         this.scene = scene;
         this.failures = new Set();
-        this._built = new Set();     // ключи, для которых fallback уже построен
+        this._built = new Set();
+        // ★ Папка и имя манифеста ручных оверрайдов
+        this.overrideDir = 'assets/overrides/';
+        this.manifestKey = '__overrides';
     }
 
     preload(registry) {
         this.scene.load.on('loaderror', (file) => this.failures.add(file.key));
 
+        // 1) Явные пути из реестра (если кто-то их прописал вручную)
         for (const [key, def] of Object.entries(registry.images || {})) {
             if (def.path) this.scene.load.image(key, def.path);
         }
-
         for (const [key, def] of Object.entries(registry.spritesheets || {})) {
             if (def.path) {
                 this.scene.load.spritesheet(key, def.path, {
                     frameWidth: def.frameWidth,
                     frameHeight: def.frameHeight,
                 });
+            }
+        }
+
+        // 2) Манифест оверрайдов — одна попытка загрузки, без 404-спама
+        this.scene.load.json(this.manifestKey, this.overrideDir + 'manifest.json');
+        this.scene.load.once(
+            `filecomplete-json-${this.manifestKey}`,
+            (_k, _t, data) => this._queueOverrides(data),
+        );
+    }
+
+    /**
+     * Читает манифест и добавляет файлы в очередь загрузки.
+     * Формат:
+     *   {
+     *     "building_main": "building_main.png",
+     *     "tree_oak_0":    "my_oak.png",
+     *     "player":        { "path": "player.png", "frameWidth": 16, "frameHeight": 24 }
+     *   }
+     */
+    _queueOverrides(manifest) {
+        if (!manifest || typeof manifest !== 'object') return;
+
+        for (const [targetKey, entry] of Object.entries(manifest)) {
+            if (typeof entry === 'string') {
+                this.scene.load.image(targetKey, this.overrideDir + entry);
+            } else if (entry && typeof entry === 'object' && entry.path) {
+                const full = this.overrideDir + entry.path;
+                if (entry.frameWidth && entry.frameHeight) {
+                    this.scene.load.spritesheet(targetKey, full, {
+                        frameWidth: entry.frameWidth,
+                        frameHeight: entry.frameHeight,
+                    });
+                } else {
+                    this.scene.load.image(targetKey, full);
+                }
             }
         }
     }
@@ -49,9 +88,6 @@ export class AssetLoader {
                     if (this.scene.textures.exists(wk)) this.scene.textures.remove(wk);
                     this.scene.textures.addCanvas(wk, c);
                 });
-                if (key.endsWith('_0')) {
-                    console.log(`[wind] ${key} → ${variants.length} variants`);
-                }
             }
         }
 
@@ -71,14 +107,6 @@ export class AssetLoader {
         }
     }
 
-    /**
-     * Текстура «пустая», если её нет ИЛИ у неё нулевые размеры.
-     *
-     * НЕЛЬЗЯ проверять frameTotal <= 1 — у одиночной картинки
-     * frameTotal как раз равно 1, и это валидное состояние.
-     * Старая версия возвращала true для всех обычных текстур и
-     * заставляла buildFallbacks пересобирать их каждый раз.
-     */
     _isEmpty(key) {
         if (!this.scene.textures.exists(key)) return true;
         const tex = this.scene.textures.get(key);

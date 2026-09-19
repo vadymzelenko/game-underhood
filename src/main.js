@@ -7,7 +7,7 @@ import { UIScene }        from './scenes/UIScene.js';
 import { TouchControlsScene } from './input/ui/TouchControlsScene.js';
 
 window.addEventListener('load', () => {
-    new Phaser.Game(buildGameConfig([
+    window.game = new Phaser.Game(buildGameConfig([
         BootScene, PreloadScene, WorldScene, InteriorScene, UIScene,
         TouchControlsScene,
     ]));

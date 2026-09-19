@@ -1,10 +1,8 @@
 import { BIOME } from '../utils/Constants.js';
 
 export const TUNING = {
-    // Глобальный множитель размера. Крутит ВСЁ (деревья, кусты, камни, траву…).
     globalScale: 1.0,
 
-    // ─── ДЕРЕВЬЯ ─────────────────────────────────────────────
     trees: {
         scale: 1.5,
         oak:    { size: 'large',  scale: 1.6, yOff:  6, shadowSquash: 0.30 },
@@ -17,7 +15,6 @@ export const TUNING = {
         dead2:  { size: 'medium', scale: 1.2, yOff:  4, shadowSquash: 0.28 },
     },
 
-    // ─── ДЕКОР ───────────────────────────────────────────────
     decor: {
         scale: 1.0,
         fern:      { scale: 1.0, yOff: 2, shadowSquash: 0.22, shadowAlphaMul: 0.85 },
@@ -48,7 +45,7 @@ export const TUNING = {
         probability: {
             [BIOME.GRASS]: 0.70, [BIOME.OAK]: 0.55, [BIOME.BIRCH]: 0.60,
             [BIOME.PINE]: 0.35, [BIOME.SWAMP]: 0.25, [BIOME.SAND]: 0.08,
-            [BIOME.WATER]: 0, [BIOME.DEEP_WATER]: 0,
+            [BIOME.WATER]: 0, [BIOME.DEEP_WATER]: 0, [BIOME.DEAD]: 0.05,
         },
     },
 
@@ -72,32 +69,18 @@ export const TUNING = {
 
     shadow: { color: 0x2a2942, alpha: 0.45 },
 
-    // ─────────────────────────────────────────────────────────────
-    //  ЖИВОТНЫЕ
-    //  flying: true — существо не привязано к земле, летает по воздуху.
-    //  hoverHeight / hoverAmp / hoverSpeed — как оно «висит».
-    //  fleeLift — доп. подъём, когда убегает от игрока.
-    // ─────────────────────────────────────────────────────────────
     animals: {
         bird: {
             flying: true,
-            hoverHeight: 42,       // px над землёй в полёте
-            perchHeight: 28,       // px над землёй на присаде
-            hoverAmp: 2,           // лёгкое покачивание
-            hoverSpeed: 1.8,       // рад/сек
-            fleeLift: 16,          // взлёт при испуге
+            hoverHeight: 42,
+            perchHeight: 28,
+            hoverAmp: 2,
+            hoverSpeed: 1.8,
+            fleeLift: 16,
             shadowAlpha: 0.20,
             shadowSquash: 0.14,
         },
     },
-
-    // ─────────────────────────────────────────────────────────────
-    //  ЗВУК
-    //  Всё синтезируется через WebAudio — никаких mp3/ogg.
-    //  forest  — многослойный отфильтрованный шум (гул + шелест).
-    //  birds   — рандомные трели (треугольник + огибающая).
-    //  rustle  — короткий шум травы/куста/папоротника.
-    // ─────────────────────────────────────────────────────────────
 
     audio: {
         enabled: true,
@@ -105,13 +88,12 @@ export const TUNING = {
 
         forest: {
             enabled: true,
-            volume: 0.22,          // как в первой версии
+            volume: 0.22,
             fadeInSec: 2.0,
-            // Многослойный bandpass-шум — тот самый «лес».
             layers: [
-                { freq: 90,  q: 0.7, gain: 0.9 },   // далёкий гул
-                { freq: 320, q: 1.1, gain: 0.5 },   // шелест листвы
-                { freq: 900, q: 0.8, gain: 0.2 },   // верхушки/шип
+                { freq: 90,  q: 0.7, gain: 0.9 },
+                { freq: 320, q: 1.1, gain: 0.5 },
+                { freq: 900, q: 0.8, gain: 0.2 },
             ],
         },
 
@@ -129,7 +111,6 @@ export const TUNING = {
         },
 
         files: {
-            // Пустая строка = использовать синтез.
             forest:       '',
             bird_1:       '',
             bird_2:       '',
@@ -140,82 +121,34 @@ export const TUNING = {
         },
     },
 
-    // ─────────────────────────────────────────────────────────────
-    //  ВЕТЕР И ГЛИТЧ ЛИСТВЫ
-    //
-    //  Система работает так: для каждой текстуры травы/листвы
-    //  мы генерируем N «ветровых» вариантов (texture_w0..wN-1).
-    //  WindSystem периодически переключает спрайт между ними —
-    //  получается покачивание + глитч пикселей.
-    //
-    //  defaults      — базовые параметры для всех типов.
-    //  types[]       — список правил. Проверка идёт СВЕРХУ ВНИЗ
-    //                  через key.startsWith(match). Первое совпадение
-    //                  выигрывает, поэтому 'tree_dead' должен идти
-    //                  раньше общего 'tree_'.
-    //  glitch        — глобальные настройки глитча (мигание).
-    // ─────────────────────────────────────────────────────────────
     wind: {
         enabled: true,
 
         defaults: {
-            // Сколько вариантов текстуры генерировать.
-            // Больше — плавнее покачивание и разнообразнее глитч,
-            // но и больше канвасов в памяти.
             frames: 6,
-            // Максимальный сдвиг в пикселях у самой верхушки (до Math.round).
             amp: 2.0,
-            // Частота синусоиды по Y. Больше — «рябит» чаще по высоте.
             freq: 0.20,
-            // Разброс per-row сдвига: именно он даёт «пиксельный шум».
             jitter: 1.0,
-            // Доля высоты канваса, ниже которой спрайт считается
-            // «прикреплённым к земле» и не шевелится.
-            // 0.95 = стабильны только последние ~3 ряда (подошва ствола).
             groundLine: 0.95,
         },
 
-        // ── ГЛИТЧ ПИКСЕЛЕЙ ─────────────────────────────────
-        // Перекрашивает часть пикселей листвы в другие оттенки
-        // зелёного из палитры. Разные пиксели в разных кадрах,
-        // поэтому при переключении текстур выглядит как «мигание».
         glitch: {
             enabled: true,
-            // Вероятность перекраски для одного подходящего пикселя.
             chance: 0.06,
-            // Доля высоты, ниже которой глитч не применяется.
-            // 0.0 = по всей высоте. 0.3 = только верхние 70% (крона).
             minYFrac: 0.0,
-            // Оттенки-кандидаты. Берутся из PALETTE в Constants.js.
             palette: ['LIGHT_GREEN', 'YELLOW_GREEN', 'GREEN', 'OLIVE_GREEN', 'TEAL'],
-            // Фильтр «это листва»: g должен превышать r и b на greenBias
-            // и быть не меньше minGreen. Так ствол (коричневый) и
-            // контур (тёмно-фиолетовый) не затрагиваются.
             greenBias: 5,
             minGreen: 40,
         },
 
         types: [
-            // Дохлые деревья не шевелятся — null отключает ветер полностью.
             { match: 'tree_dead',   config: null },
-
-            // Ёлки/сосны — узкая крона, нужно меньше амплитуды.
             { match: 'tree_pine',   config: { frames: 6, amp: 3.5, freq: 0.22, jitter: 0.9, groundLine: 0.95 } },
             { match: 'tree_spruce', config: { frames: 6, amp: 3.5, freq: 0.22, jitter: 0.9, groundLine: 0.95 } },
-
-            // Лиственные — самая заметная листва, максимальная амплитуда.
             { match: 'tree_',       config: { frames: 6, amp: 5.0, freq: 0.16, jitter: 1.3, groundLine: 0.95 } },
-
-            // Кусты
             { match: 'bush_',       config: { frames: 6, amp: 4.0, freq: 0.24, jitter: 1.1, groundLine: 0.95 } },
-
-            // Папоротники
             { match: 'fern_',       config: { frames: 6, amp: 3.5, freq: 0.30, jitter: 0.9, groundLine: 0.95 } },
-
-            // Цветы — маленькая амплитуда, иначе шапка «улетает».
             { match: 'flower_',     config: { frames: 6, amp: 3.0, freq: 0.38, jitter: 0.8, groundLine: 0.95 } },
-
-            // Трава: канвас ниже, «земля» ≈ 8/10 высоты.
             { match: 'grass',       config: { frames: 6, amp: 3.0, freq: 0.45, jitter: 0.9, groundLine: 0.85 } },
         ],
     },
@@ -243,24 +176,59 @@ export const TUNING = {
 
     dithering: { enabled: true, pDirect: 0.32, pDiagonal: 0.14 },
 
+    // ─────────────────────────────────────────────────────────────
+    //  БИОМЫ (статичный мир через сид)
+    //
+    //  • indexFreq — частота биомного шума. Чем меньше, тем крупнее зоны.
+    //  • distribution — взвешенное распределение. Порядок = порядок в
+    //    шумовом пространстве, соседние в списке биомы граничат в мире.
+    //    Сумма weight ОБЯЗАНА быть = 1.0.
+    //  • treeDensity / decorDensity — плотности по биомам (0..1).
+    // ─────────────────────────────────────────────────────────────
     biome: {
-        continentFreq: 0.00015,
-        elevationFreq: 0.00040,
-        moistureFreq:    0.00035,
-        temperatureFreq: 0.00030,
-        temperatureGradient: 0.25,
-        detailFreq: 0.02,
-        warpFreq: 0.0006,
-        warpAmp:  90,
-        deepWaterThreshold: 0.20,
-        waterThreshold:     0.27,
-        lowlandThreshold:   0.38,
-        beachBandWidth: 0.022,
-        wetBeachWidth:  0.006,
-        shoreBandWidth: 0.006,
-        pathFreq:        0.00030,
-        pathThreshold:   0.020,
+        indexFreq:  0.00070,   // частота биомного шума (низкая → крупные зоны)
+        warpFreq:   0.00060,   // domain-warp: частота искажения
+        warpAmp:    90,        // амплитуда искажения (px)
+        detailFreq: 0.02,      // плотностный шум для деревьев
+
+        // Тропинки
+        pathFreq:        0.00070,
+        pathThreshold:   0.010,
         pathSolidCenter: 0.42,
+
+        // Проценты: WATER 5%, SAND 5%, SWAMP 5%, GRASS 20%,
+        //           OAK 20%, BIRCH 20%, PINE 20%, DEAD 5%
+        distribution: [
+            { biome: BIOME.WATER, weight: 0.05 },
+            { biome: BIOME.SAND,  weight: 0.05 },
+            { biome: BIOME.SWAMP, weight: 0.05 },
+            { biome: BIOME.GRASS, weight: 0.20 },
+            { biome: BIOME.OAK,   weight: 0.20 },
+            { biome: BIOME.BIRCH, weight: 0.20 },
+            { biome: BIOME.PINE,  weight: 0.20 },
+            { biome: BIOME.DEAD,  weight: 0.05 },
+        ],
+
+        treeDensity: {
+            [BIOME.WATER]: 0.00,
+            [BIOME.SAND]:  0.02,
+            [BIOME.SWAMP]: 0.40,
+            [BIOME.GRASS]: 0.15,
+            [BIOME.OAK]:   0.80,
+            [BIOME.BIRCH]: 0.65,
+            [BIOME.PINE]:  0.85,
+            [BIOME.DEAD]:  0.10,
+        },
+        decorDensity: {
+            [BIOME.WATER]: 0.00,
+            [BIOME.SAND]:  0.20,
+            [BIOME.SWAMP]: 0.55,
+            [BIOME.GRASS]: 0.45,
+            [BIOME.OAK]:   0.60,
+            [BIOME.BIRCH]: 0.65,
+            [BIOME.PINE]:  0.55,
+            [BIOME.DEAD]:  0.35,
+        },
     },
 
     density: {
@@ -274,6 +242,29 @@ export const TUNING = {
         pebbleMultiplier:0.45,
         mossMultiplier:  0.28,
         formationMultiplier: 0.06,
+    },
+
+    // ─────────────────────────────────────────────────────────────
+    //  ТЕЛЕПОРТ ЧЕРЕЗ ГРАНИЦУ МИРА
+    //
+    //  edgeTrigger    — за сколько px до границы срабатывает телепорт
+    //  safeMargin     — отступ точки спавна от целевой границы
+    //  loadingMs      — сколько держать чёрный экран (генерация чанков)
+    //  fadeIn/fadeOut — длительность плавных переходов
+    //  border*        — внешний вид границы мира
+    // ─────────────────────────────────────────────────────────────
+    teleport: {
+        edgeTrigger:       40,
+        safeMargin:        400,
+        loadingMs:         2000,
+        fadeInMs:          450,
+        fadeOutMs:         450,
+        borderThickness:   48,
+        borderColor:       0x7a2849,
+        borderAlpha:       0.55,
+        borderEdgeColor:   0xe67a84,
+        borderEdgeAlpha:   0.85,
+        borderEdgeWidth:   3,
     },
 
     obstacles: {
@@ -298,7 +289,6 @@ export const TUNING = {
         formation_mountain: { bodyW: 48, bodyH: 16, yOff: 3, solid: true },
         formation_plateau:  { bodyW: 56, bodyH: 12, yOff: 3, solid: true },
     },
-
 };
 
 export function buildGameConfig(scenes) {

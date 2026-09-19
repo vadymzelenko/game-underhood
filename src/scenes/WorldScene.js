@@ -7,10 +7,10 @@ import { WindSystem }     from '../world/WindSystem.js';
 
 import {
     DEPTH, CAMERA_ZOOM, PALETTE as P,
-    WORLD_MIN, WORLD_SIZE, BIOME,
-    BUILDING_BOUNDS,
+    WORLD_MIN, WORLD_MAX, WORLD_SIZE, BIOME,
 } from '../utils/Constants.js';
 
+import { BUILDINGS } from '../config/BuildingsConfig.js';
 import { InputManager } from '../input/InputManager.js';
 import { VignetteOverlay } from '../ui/VignetteOverlay.js';
 import { DayNightCycle } from '../systems/DayNightCycle.js';
@@ -40,14 +40,17 @@ export class WorldScene extends Phaser.Scene {
         this._obsCell = OBS_CELL;
         this._obsDirty = true;
 
-        const spawn = this._findSafeSpawn(0, 110);
-        this.building = new Building(this, 'Детский дом');
-        this._reserveBuildingInGrid();
+        this._drawWorldBorder();
 
+        // Игрок — ДО зданий: им нужен player.sprite для коллайдеров
+        const spawn = this._findSafeSpawn(0, 110);
         this.player = new Player(this, spawn.x, spawn.y, {
             charKey: 'player', texture: 'player', speed: TUNING.player.speed,
         });
         this.player.sprite.setCollideWorldBounds(true);
+
+        // Здания (создаются ПОСЛЕ игрока)
+        this._buildAllBuildings();
 
         this.playerShadow = this.add.image(spawn.x, spawn.y, 'shadow_soft');
         this.playerShadow
@@ -57,7 +60,6 @@ export class WorldScene extends Phaser.Scene {
             .setDisplaySize(TUNING.player.shadowW, TUNING.player.shadowH)
             .setDepth(DEPTH.SHADOW);
 
-        this.physics.add.collider(this.player.sprite, this.building.body);
         this.physics.add.collider(this.player.sprite, this.obstaclesGroup);
 
         const followLerp = TUNING.camera?.followLerp ?? 1;
@@ -86,6 +88,9 @@ export class WorldScene extends Phaser.Scene {
 
         this.vignette = new VignetteOverlay(this);
 
+        this._teleporting = false;
+        this._buildTeleportOverlay();
+
         this._lastShadowKey = null;
         this._blockedCalls = 0;
 
@@ -94,12 +99,98 @@ export class WorldScene extends Phaser.Scene {
             this.inputManager.destroy();
             this.vignette?.destroy();
             this.scale.off('resize', this._onResize, this);
+            this.scale.off('resize', this._onResizeTeleport, this);
         });
 
         this._gKey = this.input.keyboard.addKey('G');
         this._gKey.on('down', () => this.grid.toggleDebug());
 
         this._wireAmbience();
+    }
+
+    _drawWorldBorder() {
+        const T = TUNING.teleport;
+        const t = T.borderThickness;
+        const d = DEPTH.GROUND + 1;
+
+        const g = this.add.graphics().setDepth(d);
+
+        g.fillStyle(T.borderColor, T.borderAlpha);
+        g.fillRect(WORLD_MIN, WORLD_MIN,     WORLD_SIZE, t);
+        g.fillRect(WORLD_MIN, WORLD_MAX - t, WORLD_SIZE, t);
+        g.fillRect(WORLD_MIN, WORLD_MIN,     t, WORLD_SIZE);
+        g.fillRect(WORLD_MAX - t, WORLD_MIN, t, WORLD_SIZE);
+
+        const e = T.borderEdgeWidth;
+        const ei = t - e;
+        g.fillStyle(T.borderEdgeColor, T.borderEdgeAlpha);
+        g.fillRect(WORLD_MIN + ei, WORLD_MIN + ei, WORLD_SIZE - 2 * ei, e);
+        g.fillRect(WORLD_MIN + ei, WORLD_MAX - t,  WORLD_SIZE - 2 * ei, e);
+        g.fillRect(WORLD_MIN + ei, WORLD_MIN + ei, e, WORLD_SIZE - 2 * ei);
+        g.fillRect(WORLD_MAX - t,  WORLD_MIN + ei, e, WORLD_SIZE - 2 * ei);
+    }
+
+    _buildAllBuildings() {
+        this.buildings = [];
+        this.buildingsByKey = {};
+
+        for (const cfg of BUILDINGS) {
+            const b = new Building(this, cfg);
+            this.buildings.push(b);
+            this.buildingsByKey[cfg.id] = b;
+            this.physics.add.collider(this.player.sprite, b.body);
+            this._reserveBuildingInGrid(b);
+        }
+    }
+
+    _reserveBuildingInGrid(building) {
+        const cs = this.grid.cellSize;
+        const b = building.config.bounds;
+        const cx = Math.floor(b.x / cs);
+        const cy = Math.floor(b.y / cs);
+        const wC = Math.ceil(b.w / cs);
+        const hC = Math.ceil(b.h / cs);
+        this.grid.occupy(cx, cy, wC, hC, { kind: 'building', ref: building });
+    }
+
+    _findNearestBuilding() {
+        let best = null;
+        let bestD = Infinity;
+        for (const b of this.buildings) {
+            const d = Math.hypot(this.player.x - b.doorX, this.player.y - b.doorY);
+            if (d < b.doorRadius && d < bestD) { bestD = d; best = b; }
+        }
+        return best;
+    }
+
+    _buildTeleportOverlay() {
+        const sw = this.scale.width, sh = this.scale.height;
+
+        this.teleportOverlay = this.add.rectangle(0, 0, sw, sh, 0x0a0a19, 1)
+            .setOrigin(0, 0)
+            .setScrollFactor(0)
+            .setDepth(DEPTH.OVERLAY + 100)
+            .setAlpha(0)
+            .setVisible(false);
+
+        this.teleportText = this.add.text(sw / 2, sh / 2, 'ПЕРЕХОД...', {
+            fontFamily: 'monospace',
+            fontSize: '18px',
+            color: '#fff1a9',
+            stroke: '#120e23',
+            strokeThickness: 4,
+        })
+            .setOrigin(0.5)
+            .setScrollFactor(0)
+            .setDepth(DEPTH.OVERLAY + 101)
+            .setAlpha(0)
+            .setVisible(false);
+
+        this._onResizeTeleport = (size) => {
+            this.teleportOverlay.setSize(size.width, size.height);
+            this.teleportText.setPosition(size.width / 2, size.height / 2);
+        };
+        this.scale.on('resize', this._onResizeTeleport, this);
     }
 
     _wireAmbience() {
@@ -115,15 +206,10 @@ export class WorldScene extends Phaser.Scene {
         this.chunkManager.destroyAll();
         this.windSystem.destroy();
         this._obsGrid.clear();
-    }
-
-    _reserveBuildingInGrid() {
-        const cs = this.grid.cellSize;
-        const cx = Math.floor(BUILDING_BOUNDS.x / cs);
-        const cy = Math.floor(BUILDING_BOUNDS.y / cs);
-        const wC = Math.ceil(BUILDING_BOUNDS.w / cs);
-        const hC = Math.ceil(BUILDING_BOUNDS.h / cs);
-        this.grid.occupy(cx, cy, wC, hC, { kind: 'building', ref: this.building });
+        for (const b of this.buildings) b.destroy();
+        this.buildings.length = 0;
+        this.buildingsByKey = {};
+        clearRuntimeBuildings();   // ★ сбрасываем рантайм при выходе из сцены
     }
 
     _rebuildObstacleIndex() {
@@ -198,7 +284,135 @@ export class WorldScene extends Phaser.Scene {
         return b === BIOME.WATER || b === BIOME.DEEP_WATER;
     }
 
+    _findFreeSpotNear(x, y, maxR = 400) {
+        if (!this.isBlockedAt(x, y, true)) return { x, y };
+        const step = 24;
+        for (let r = step; r <= maxR; r += step) {
+            const samples = Math.max(8, Math.floor((Math.PI * 2 * r) / 32));
+            for (let i = 0; i < samples; i++) {
+                const a = (i / samples) * Math.PI * 2;
+                const xx = x + Math.cos(a) * r;
+                const yy = y + Math.sin(a) * r;
+                if (!this.isBlockedAt(xx, yy, true)) return { x: xx, y: yy };
+            }
+        }
+        return null;
+    }
+
+    _checkWorldWrap() {
+        if (this._teleporting) return;
+
+        const body = this.player.sprite.body;
+        if (!body) return;
+
+        const cx = body.center.x;
+        const cy = body.center.y;
+        const T = TUNING.teleport;
+
+        const hitL = cx <= WORLD_MIN + T.edgeTrigger;
+        const hitR = cx >= WORLD_MAX - T.edgeTrigger;
+        const hitT = cy <= WORLD_MIN + T.edgeTrigger;
+        const hitB = cy >= WORLD_MAX - T.edgeTrigger;
+
+        if (!hitL && !hitR && !hitT && !hitB) return;
+        this._startTeleport({ hitL, hitR, hitT, hitB });
+    }
+
+    _startTeleport(hits) {
+        if (this._teleporting) return;
+        this._teleporting = true;
+
+        const T = TUNING.teleport;
+        const ov = this.teleportOverlay;
+        const tx = this.teleportText;
+
+        const b = this.player.sprite.body;
+        if (b) b.setVelocity(0, 0);
+
+        ov.setVisible(true);
+        tx.setVisible(true);
+
+        this.tweens.add({
+            targets: [ov, tx],
+            alpha: 1,
+            duration: T.fadeOutMs,
+            ease: 'Sine.easeIn',
+            onComplete: () => {
+                const target = this._pickTeleportTarget(hits);
+                const safe = this._findSafeSpawn(target.x, target.y);
+                this._doTeleport(safe);
+
+                this.time.delayedCall(T.loadingMs, () => {
+                    this.tweens.add({
+                        targets: [ov, tx],
+                        alpha: 0,
+                        duration: T.fadeInMs,
+                        ease: 'Sine.easeOut',
+                        onComplete: () => {
+                            ov.setVisible(false);
+                            tx.setVisible(false);
+                            this._teleporting = false;
+                        },
+                    });
+                });
+            },
+        });
+    }
+
+    _pickTeleportTarget(hits) {
+        const T = TUNING.teleport;
+        const innerMin = WORLD_MIN + T.safeMargin;
+        const innerMax = WORLD_MAX - T.safeMargin;
+        const rand = (a, b) => a + Math.random() * (b - a);
+
+        const options = [];
+        if (!hits.hitL) options.push({ x: innerMin, y: rand(innerMin, innerMax) });
+        if (!hits.hitR) options.push({ x: innerMax, y: rand(innerMin, innerMax) });
+        if (!hits.hitT) options.push({ x: rand(innerMin, innerMax), y: innerMin });
+        if (!hits.hitB) options.push({ x: rand(innerMin, innerMax), y: innerMax });
+
+        if (!options.length) {
+            options.push({ x: innerMin, y: rand(innerMin, innerMax) });
+            options.push({ x: innerMax, y: rand(innerMin, innerMax) });
+            options.push({ x: rand(innerMin, innerMax), y: innerMin });
+            options.push({ x: rand(innerMin, innerMax), y: innerMax });
+        }
+
+        return options[Math.floor(Math.random() * options.length)];
+    }
+
+    _doTeleport(target) {
+        const cam = this.cameras.main;
+        cam.stopFollow();
+
+        this.player.teleport(target.x, target.y);
+
+        this._obsDirty = true;
+        this.chunkManager.update(target.x, target.y, null, null);
+
+        this._obsDirty = true;
+        if (this.isBlockedAt(target.x, target.y, true)) {
+            const free = this._findFreeSpotNear(target.x, target.y, 500);
+            if (free) this.player.teleport(free.x, free.y);
+        }
+
+        cam.centerOn(this.player.x, this.player.y);
+        cam.startFollow(this.player.sprite, true, 1, 1);
+        cam.centerOn(this.player.x, this.player.y);
+
+        this.player.sprite.setDepth(DEPTH.ENTITIES + this.player.y);
+        this.playerShadow.setPosition(this.player.x, this.player.y + TUNING.player.yOff);
+    }
+
     update(_, deltaMs) {
+        if (this._teleporting) {
+            const b = this.player.sprite.body;
+            if (b) b.setVelocity(0, 0);
+            this.dayNight.update(deltaMs);
+            this._updateAmbient();
+            return;
+        }
+
         this.grid.update();
         this.inputManager.update();
 
@@ -211,17 +425,14 @@ export class WorldScene extends Phaser.Scene {
             (x, y) => this.isBlockedAt(x, y, false),
         );
 
+        this._checkWorldWrap();
+
         const chunksChanged = this.chunkManager.update(
-            this.player.x,
-            this.player.y,
-            this.player,
+            this.player.x, this.player.y, this.player,
             (x, y) => this.isBlockedAt(x, y, true),
         );
-
         if (chunksChanged) this._obsDirty = true;
 
-        // ★ Пиксельный ветер — обновляем после чанков,
-        //   т.к. ChunkManager мог зарегистрировать новые спрайты.
         this.windSystem.update();
 
         this.player.sprite.setDepth(DEPTH.ENTITIES + this.player.y);
@@ -230,11 +441,15 @@ export class WorldScene extends Phaser.Scene {
         const biome = this.biomeGen.getBiome(this.player.x, this.player.y);
         this.vignette?.update(this.player.x, this.player.y, biome);
 
-        const near = this.building.isPlayerNear(this.player.x, this.player.y);
+        const near = this._findNearestBuilding();
         if (near) {
             this.promptText.setVisible(true);
-            this.promptText.setPosition(Math.round(this.player.x), Math.round(this.player.y - 26));
-            if (this.inputManager.state.interactPressed) this._enterInterior();
+            this.promptText.setText(`E — войти в ${near.name}`);
+            this.promptText.setPosition(
+                Math.round(this.player.x),
+                Math.round(this.player.y - 26),
+            );
+            if (this.inputManager.state.interactPressed) this._enterInterior(near);
         } else {
             this.promptText.setVisible(false);
         }
@@ -258,9 +473,16 @@ export class WorldScene extends Phaser.Scene {
         this.ambientOverlay.setAlpha(a.alpha);
     }
 
-    _enterInterior() {
-        this.returnPoint = { x: this.building.doorX, y: this.building.doorY + 12 };
+    _enterInterior(building) {
+        this.returnPoint = {
+            x: building.doorX,
+            y: building.doorY + 12,
+            buildingId: building.id,
+        };
         this.scene.pause();
-        this.scene.launch('InteriorScene', { fromWorld: 'WorldScene' });
+        this.scene.launch('InteriorScene', {
+            fromWorld: 'WorldScene',
+            buildingId: building.id,
+        });
     }
 }

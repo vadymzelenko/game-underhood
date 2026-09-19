@@ -1,6 +1,5 @@
 import {
     CHUNK_PX, BIOME, DEPTH,
-    BUILDING_BOUNDS, BUILDING_CLEARING,
 } from '../utils/Constants.js';
 import { hash2D } from '../utils/MathUtils.js';
 import { JitteredSampler } from './JitteredSampler.js';
@@ -8,6 +7,13 @@ import { TUNING } from '../config/TuningConfig.js';
 import { AnimalSprite } from '../animals/AnimalSprite.js';
 import { ambience } from '../systems/AmbientAudio.js';
 import { collectWindFrames } from './WindSystem.js';
+
+// ★ Убрали BUILDING_CLEARING — он больше не экспортируется.
+//   Хелперы сами знают padding каждого здания.
+import {
+    isInsideAnyBuilding,
+    isInsideAnyAnimalZone,
+} from '../config/BuildingsConfig.js';
 
 const TREE_DENSE_SALT  = 0x1111;
 const TREE_SPARSE_SALT = 0x2222;
@@ -20,8 +26,9 @@ const STUMP_SALT       = 0x8888;
 const PEBBLE_SALT      = 0x9999;
 const MOSS_SALT        = 0xAAAA;
 const FORMATION_SALT   = 0xBBBB;
-const ANIMAL_BUILDING_PAD = 12;
 
+// ★ Убрали ANIMAL_BUILDING_PAD — не используется.
+//   Зона животных теперь в BuildingsConfig (animalPad).
 
 const MAX_ANIMALS_PER_CHUNK = 2;
 
@@ -39,6 +46,8 @@ export class Chunk {
         this.obstacles = [];
         this.animals = [];
         this.vegItems = [];
+        // ★ Флаг: спавнили ли уже животных в этом чанке (ровно один раз за жизнь чанка).
+        this.animalsSpawned = false;
     }
 
     _pickVariant(baseKey, count, wx, wy, salt) {
@@ -176,9 +185,24 @@ export class Chunk {
         for (const p of formations) this._placeFormation(p.x, p.y);
         for (const p of grass)      this._placeGrass(p.x, p.y);
 
-        if (opts.spawnAnimals) this._spawnAnimals(ox, oy, maxX, maxY);
+        // ★ Животные НЕ спавнятся здесь. Их вызывает ChunkManager.spawnAnimals(),
+        //   когда чанк входит в ANIMAL_SPAWN_RADIUS. См. ChunkManager.update().
 
         this._collectVegetation();
+    }
+
+    // ── Животные ────────────────────────────────────────────
+    /**
+     * Публичный метод. Вызывается ChunkManager'ом один раз — когда чанк
+     * входит в ANIMAL_SPAWN_RADIUS от игрока. Повторные вызовы игнорируются
+     * благодаря флагу animalsSpawned.
+     */
+    spawnAnimals() {
+        if (this.animalsSpawned) return;
+        this.animalsSpawned = true;
+        const ox = this.cx * CHUNK_PX;
+        const oy = this.cy * CHUNK_PX;
+        this._spawnAnimals(ox, oy, ox + CHUNK_PX, oy + CHUNK_PX);
     }
 
     // ── Ветер ────────────────────────────────────────────────
@@ -191,8 +215,6 @@ export class Chunk {
     }
 
     // ── Фауна ───────────────────────────────────────────────
-       // почти вплотную к зданию
-
     _spawnAnimals(ox, oy, maxX, maxY) {
         const PLAN = [
             { key: 'deer',     variants: ['brown', 'tan', 'buck'],         sizes: ['medium', 'large'],  prob: 0.14 },
@@ -203,13 +225,13 @@ export class Chunk {
             { key: 'toad',     variants: [null],                           sizes: ['small', 'medium'],  prob: 0.14 },
         ];
 
-        const sampler = new JitteredSampler(64, 0xA17E);   // было 96
+        const sampler = new JitteredSampler(64, 0xA17E);
         const hits = sampler.sample(ox, oy, maxX, maxY, (x, y) => {
             if (this._insideAnimalZone(x, y)) return 0;
             if (this.biomeGen.getPath(x, y) > 0.4) return 0;
             const b = this.biomeGen.getBiome(x, y);
             if (b === BIOME.WATER || b === BIOME.DEEP_WATER || b === BIOME.SAND) return 0;
-            return 0.55;   // было 0.30
+            return 0.55;
         }, 0xABCD);
 
         for (const p of hits) {
@@ -232,10 +254,7 @@ export class Chunk {
     }
 
     _insideAnimalZone(wx, wy) {
-        const b = BUILDING_BOUNDS;
-        const p = ANIMAL_BUILDING_PAD;
-        return wx > b.x - p && wx < b.x + b.w + p
-            && wy > b.y - p && wy < b.y + b.h + p;
+        return isInsideAnyAnimalZone(wx, wy);
     }
 
     updateAnimals(dt, player, isBlocked) {
@@ -277,6 +296,10 @@ export class Chunk {
             case BIOME.GRASS:
                 if (r < 0.35) { key = this._pickVariant('tree_birch', V.birch, wx, wy, 5001); cfg = TUNING.trees.birch; }
                 break;
+            case BIOME.DEAD:
+                if (r < 0.5) { key = this._pickVariant('tree_dead',  V.dead,  wx, wy, 6001); cfg = TUNING.trees.dead; }
+                else         { key = this._pickVariant('tree_dead2', V.dead2, wx, wy, 6002); cfg = TUNING.trees.dead2; }
+                break;
         }
         if (!key || !cfg) return;
         const obstacle = { bodyW: 10, bodyH: 6, yOff: 1 };
@@ -308,6 +331,7 @@ export class Chunk {
                 else               { baseKey = 'fern_1'; cfg = TUNING.decor.fern; }
                 break;
             case BIOME.SWAMP:
+            case BIOME.DEAD:
                 if (logRoll)       { baseKey = 'log';    cfg = TUNING.decor.log; }
                 else if (r < 0.7)  { baseKey = 'fern_1'; cfg = TUNING.decor.fern; }
                 else               { baseKey = 'rock_1'; cfg = TUNING.decor.rock; }
@@ -348,6 +372,8 @@ export class Chunk {
             prefix = r < 0.55 ? 'bush_green' : 'bush_autumn';
         } else if (biome === BIOME.GRASS) {
             prefix = r < 0.6 ? 'bush_green' : 'bush_berry';
+        } else if (biome === BIOME.DEAD) {
+            prefix = r < 0.5 ? 'bush_dark' : 'bush_autumn';
         }
         const key = this._pickVariant(prefix, V.bush, wx, wy, 6601);
         this._addObject(wx, wy, key, TUNING.decor.bush, null);
@@ -525,10 +551,7 @@ export class Chunk {
     }
 
     _insideBuildingZone(wx, wy) {
-        const b = BUILDING_BOUNDS;
-        const p = BUILDING_CLEARING;
-        return wx > b.x - p && wx < b.x + b.w + p
-            && wy > b.y - p && wy < b.y + b.h + p;
+        return isInsideAnyBuilding(wx, wy);
     }
 
     destroy() {
