@@ -35,8 +35,8 @@ export const TILE_SIZE         = 16;
 export const CHUNK_SIZE        = 16;
 export const CHUNK_PX          = TILE_SIZE * CHUNK_SIZE;    // 256
 export const VIEW_CHUNK_RADIUS = 3;
-export const CAMERA_ZOOM       = 3;
-export const WORLD_SEED        = 20240517;
+export const CAMERA_ZOOM       = 2;
+export const WORLD_SEED        = 2024051;
 
 // ─── ФИНАЛЬНЫЙ МИР 10 000 × 10 000 px ───────────────────────
 export const WORLD_SIZE = 10000;

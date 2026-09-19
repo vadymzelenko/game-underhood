@@ -5,16 +5,14 @@ export class Player {
         this.scene   = scene;
         this.charKey = opts.charKey ?? 'player';
         this.texture = opts.texture ?? 'player';
-        this.speed   = opts.speed ?? 70;
+        this.speed   = opts.speed   ?? 70;
 
         this.sprite = scene.physics.add.sprite(x, y, this.texture, 0);
         this.sprite.setOrigin(0.5, 1);
         this.sprite.setDepth(DEPTH.ENTITIES + y);
 
-        // Хитбокс — по ногам (нативный кадр 16×24)
-        const bw = opts.bodyWidth  ?? 10;
-        const bh = opts.bodyHeight ?? 5;
-        this.sprite.body.setSize(bw, bh);
+        // Хитбокс — «ноги». Frame 16×24, origin (0.5,1), body 10×5.
+        this.sprite.body.setSize(10, 5);
         this.sprite.body.setOffset(3, 18);
 
         this.facing = 'down';
@@ -25,24 +23,47 @@ export class Player {
     get x() { return this.sprite.x; }
     get y() { return this.sprite.y; }
 
-    update(input) {
-        const mx = input.moveX ?? 0;
-        const my = input.moveY ?? 0;
-
-        this.sprite.body.setVelocity(mx * this.speed, my * this.speed);
-
-        // Направление — по доминирующей оси
-        let dir = this.facing;
+    update(input, isBlocked = null) {
+        const mx  = input.moveX ?? 0;
+        const my  = input.moveY ?? 0;
         const len = Math.hypot(mx, my);
-        if (len > 0.05) {
-            if (Math.abs(mx) > Math.abs(my)) {
-                dir = mx < 0 ? 'left' : 'right';
-            } else {
-                dir = my < 0 ? 'up' : 'down';
-            }
+
+        let vx = mx * this.speed;
+        let vy = my * this.speed;
+
+        // Slide-обход: если впереди по одной оси стена — едем по другой.
+        // Никаких вееров и лучей, обычная «прилипающая» коллизия.
+        if (isBlocked && len > 0.05) {
+            const nx = mx / len;
+            const ny = my / len;
+            const dt = 1 / 60;
+            const buf = 4;
+
+            const blockedX = vx !== 0 &&
+                isBlocked(this.x + nx * (this.speed * dt + buf), this.y);
+            const blockedY = vy !== 0 &&
+                isBlocked(this.x, this.y + ny * (this.speed * dt + buf));
+
+            if (blockedX && blockedY) { vx = 0; vy = 0; }
+            else if (blockedX)        { vx = 0; }
+            else if (blockedY)        { vy = 0; }
         }
 
+        this.sprite.body.setVelocity(vx, vy);
+
+        // Снап при полной остановке — убирает микро-джиттер в покое.
+        if (vx === 0 && vy === 0) {
+            this.sprite.body.position.x = Math.round(this.sprite.body.position.x);
+            this.sprite.body.position.y = Math.round(this.sprite.body.position.y);
+        }
+
+        // Анимация
+        let dir = this.facing;
         const moving = len > 0.05;
+        if (moving) {
+            if (Math.abs(mx) > Math.abs(my)) dir = mx < 0 ? 'left' : 'right';
+            else                             dir = my < 0 ? 'up'   : 'down';
+        }
         if (dir !== this.facing || moving !== this.moving) {
             this.facing = dir;
             this.moving = moving;
