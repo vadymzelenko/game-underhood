@@ -59,4 +59,4 @@ underhood/
 
 ## License
 
-[MIT](LICENSE) © Vadym Zelenko
+[GPL-3.0](LICENSE) © Vadym Zelenko
